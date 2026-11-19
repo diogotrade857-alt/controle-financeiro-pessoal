@@ -1,0 +1,29 @@
+"""Hash de senhas com PBKDF2-HMAC-SHA256 (biblioteca padrão, sem dependências).
+
+Formato armazenado:  pbkdf2_sha256$<iterações>$<sal hex>$<hash hex>
+A senha nunca é gravada em texto puro, e cada usuário tem um sal aleatório.
+"""
+import hashlib
+import hmac
+import os
+
+ITERACOES = 120_000
+_ALGORITMO = "pbkdf2_sha256"
+
+
+def gerar_hash(senha):
+    sal = os.urandom(16)
+    h = hashlib.pbkdf2_hmac("sha256", senha.encode("utf-8"), sal, ITERACOES)
+    return f"{_ALGORITMO}${ITERACOES}${sal.hex()}${h.hex()}"
+
+
+def verificar(senha, armazenado):
+    try:
+        alg, iteracoes, sal, esperado = armazenado.split("$")
+        if alg != _ALGORITMO:
+            return False
+        calculado = hashlib.pbkdf2_hmac(
+            "sha256", senha.encode("utf-8"), bytes.fromhex(sal), int(iteracoes))
+    except (ValueError, AttributeError):
+        return False
+    return hmac.compare_digest(calculado.hex(), esperado)   # tempo constante
