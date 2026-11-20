@@ -14,6 +14,7 @@ from financeiro.modelos import Meta, criar_transacao
 
 
 class RepositorioTransacoes:
+    """Acesso ao SQLite para transações; toda consulta é filtrada por usuário."""
     def __init__(self, origem="financeiro.db"):
         # Aceita um caminho de arquivo ou um objeto Banco já aberto.
         self._banco = origem if isinstance(origem, Banco) else Banco(origem)
@@ -27,6 +28,7 @@ class RepositorioTransacoes:
         return self._banco.conn
 
     def fechar(self):
+        """Fecha a conexão com o banco."""
         self._banco.fechar()
 
     @staticmethod
@@ -52,6 +54,7 @@ class RepositorioTransacoes:
 
     # ---------- CRUD ----------
     def adicionar(self, t, usuario_id=None):
+        """Grava a transação, define o ID gerado pelo banco e a devolve."""
         with self._conn:
             cur = self._conn.execute(
                 "INSERT INTO transacoes (tipo, data, valor, categoria, descricao, usuario_id) "
@@ -62,11 +65,13 @@ class RepositorioTransacoes:
         return t
 
     def listar(self, tipo=None, usuario_id=None, inicio=None, fim=None):
+        """Lista as transações do usuário, ordenadas por data, com filtros opcionais."""
         where, params = self._filtro(usuario_id, tipo, inicio, fim)
         sql = "SELECT * FROM transacoes" + where + " ORDER BY data, id"
         return [self._para_objeto(l) for l in self._conn.execute(sql, params)]
 
     def buscar(self, id_, usuario_id=None):
+        """Busca uma transação pelo ID; lança TransacaoNaoEncontradaError se não existir."""
         linha = self._conn.execute(
             "SELECT * FROM transacoes WHERE id = ? AND usuario_id IS ?",
             (id_, usuario_id)).fetchone()
@@ -75,6 +80,7 @@ class RepositorioTransacoes:
         return self._para_objeto(linha)
 
     def atualizar(self, t, usuario_id=None):
+        """Grava no banco as alterações de uma transação já existente."""
         with self._conn:
             cur = self._conn.execute(
                 "UPDATE transacoes SET data=?, valor=?, categoria=?, descricao=? "
@@ -85,6 +91,7 @@ class RepositorioTransacoes:
             raise TransacaoNaoEncontradaError(f"Transação ID {t.id} não encontrada.")
 
     def remover(self, id_, usuario_id=None):
+        """Remove a transação pelo ID; lança TransacaoNaoEncontradaError se não existir."""
         with self._conn:
             cur = self._conn.execute(
                 "DELETE FROM transacoes WHERE id = ? AND usuario_id IS ?", (id_, usuario_id))
@@ -92,11 +99,13 @@ class RepositorioTransacoes:
             raise TransacaoNaoEncontradaError(f"Transação ID {id_} não encontrada.")
 
     def total_registros(self, usuario_id=None):
+        """Quantidade de transações do usuário."""
         return self._conn.execute(
             "SELECT COUNT(*) FROM transacoes WHERE usuario_id IS ?", (usuario_id,)).fetchone()[0]
 
     # ---------- agregações feitas pelo banco (RF08–RF11) ----------
     def totais_por_tipo(self, usuario_id=None, inicio=None, fim=None):
+        """Soma de receitas e despesas, calculada pelo banco."""
         where, params = self._filtro(usuario_id, None, inicio, fim)
         linhas = self._conn.execute(
             "SELECT tipo, SUM(valor) AS total FROM transacoes" + where + " GROUP BY tipo", params)
@@ -105,7 +114,18 @@ class RepositorioTransacoes:
             totais[l["tipo"]] = l["total"]
         return totais
 
+    def quantidades_por_tipo(self, usuario_id=None, inicio=None, fim=None):
+        """Quantidade de receitas e de despesas, contada pelo banco."""
+        where, params = self._filtro(usuario_id, None, inicio, fim)
+        linhas = self._conn.execute(
+            "SELECT tipo, COUNT(*) AS qtd FROM transacoes" + where + " GROUP BY tipo", params)
+        quantidades = {"receita": 0, "despesa": 0}
+        for l in linhas:
+            quantidades[l["tipo"]] = l["qtd"]
+        return quantidades
+
     def totais_por_categoria(self, tipo, usuario_id=None, inicio=None, fim=None):
+        """Soma por categoria de um tipo de transação, calculada pelo banco."""
         where, params = self._filtro(usuario_id, tipo, inicio, fim)
         linhas = self._conn.execute(
             "SELECT categoria, SUM(valor) AS total FROM transacoes" + where +
@@ -113,6 +133,7 @@ class RepositorioTransacoes:
         return [(l["categoria"], l["total"]) for l in linhas]
 
     def totais_por_mes(self, ano, usuario_id=None):
+        """Soma por mês e tipo de um ano, calculada pelo banco."""
         where, params = self._filtro(usuario_id, None, date(ano, 1, 1), date(ano, 12, 31))
         linhas = self._conn.execute(
             "SELECT substr(data, 1, 7) AS mes, tipo, SUM(valor) AS total FROM transacoes" +
@@ -157,6 +178,7 @@ class RepositorioTransacoes:
 
 
 class RepositorioMetas:
+    """Acesso ao SQLite para as metas de gasto de cada usuário."""
     def __init__(self, banco):
         self._banco = banco
 
@@ -165,11 +187,13 @@ class RepositorioMetas:
         return self._banco.conn
 
     def listar(self, usuario_id=None):
+        """Lista as metas do usuário, em ordem alfabética de categoria."""
         linhas = self._conn.execute(
             "SELECT * FROM metas WHERE usuario_id IS ? ORDER BY categoria", (usuario_id,))
         return [Meta(l["categoria"], l["limite"], id=l["id"]) for l in linhas]
 
     def adicionar(self, meta, usuario_id=None):
+        """Grava uma nova meta; lança ValidacaoError se a categoria já tiver meta."""
         try:
             with self._conn:
                 cur = self._conn.execute(
@@ -181,6 +205,7 @@ class RepositorioMetas:
         return meta
 
     def atualizar(self, meta, usuario_id=None):
+        """Grava as alterações de uma meta existente."""
         with self._conn:
             cur = self._conn.execute(
                 "UPDATE metas SET categoria=?, limite=? WHERE id=? AND usuario_id IS ?",
@@ -189,6 +214,7 @@ class RepositorioMetas:
             raise MetaNaoEncontradaError("Meta não encontrada.")
 
     def remover(self, id_, usuario_id=None):
+        """Remove a meta pelo ID."""
         with self._conn:
             cur = self._conn.execute(
                 "DELETE FROM metas WHERE id=? AND usuario_id IS ?", (id_, usuario_id))

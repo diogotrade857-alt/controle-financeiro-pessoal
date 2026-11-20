@@ -12,12 +12,14 @@ _ALGORITMO = "pbkdf2_sha256"
 
 
 def gerar_hash(senha):
+    """Gera o hash da senha com PBKDF2-SHA256 e um sal aleatório."""
     sal = os.urandom(16)
     h = hashlib.pbkdf2_hmac("sha256", senha.encode("utf-8"), sal, ITERACOES)
     return f"{_ALGORITMO}${ITERACOES}${sal.hex()}${h.hex()}"
 
 
 def verificar(senha, armazenado):
+    """Confere se a senha corresponde ao hash armazenado (comparação em tempo constante)."""
     try:
         alg, iteracoes, sal, esperado = armazenado.split("$")
         if alg != _ALGORITMO:

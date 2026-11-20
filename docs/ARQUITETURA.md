@@ -52,6 +52,7 @@ classDiagram
         +editar()
         +remover()
         +calcular_saldo()
+        +relatorio_por_periodo()
         +relatorio_por_categoria()
         +relatorio_mensal()
         +definir_meta()

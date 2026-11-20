@@ -15,6 +15,7 @@ from financeiro.repositorio import RepositorioMetas
 
 @dataclass(frozen=True)
 class Saldo:
+    """Total de receitas, total de despesas e saldo."""
     receitas: float
     despesas: float
 
@@ -24,7 +25,23 @@ class Saldo:
 
 
 @dataclass(frozen=True)
+class ResumoPeriodo:
+    """Receitas, despesas, saldo e quantidade de lançamentos de um período."""
+    inicio: object             # date ou None (sem limite)
+    fim: object                # date ou None (sem limite)
+    receitas: float
+    despesas: float
+    qtd_receitas: int
+    qtd_despesas: int
+
+    @property
+    def saldo(self):
+        return round(self.receitas - self.despesas, 2)
+
+
+@dataclass(frozen=True)
 class ResumoCategoria:
+    """Total e percentual de uma categoria."""
     categoria: str
     total: float
     percentual: float          # fatia da categoria no total do tipo (0 a 100)
@@ -32,6 +49,7 @@ class ResumoCategoria:
 
 @dataclass(frozen=True)
 class ResumoMensal:
+    """Receitas, despesas e saldo de um mês."""
     mes: str                   # 'aaaa-mm'
     receitas: float
     despesas: float
@@ -43,6 +61,7 @@ class ResumoMensal:
 
 @dataclass(frozen=True)
 class StatusMeta:
+    """Situação de uma meta no mês: limite, gasto, percentual e se foi excedida."""
     categoria: str
     limite: float
     gasto: float
@@ -61,6 +80,7 @@ class StatusMeta:
 
 
 class ControleFinanceiro:
+    """Regras de negócio do sistema para um usuário (camada de serviço)."""
     def __init__(self, repositorio, usuario_id=None, metas=None):
         self._repo = repositorio
         self._uid = usuario_id
@@ -77,23 +97,28 @@ class ControleFinanceiro:
 
     # ---------- RF03 / RF04 ----------
     def registrar_receita(self, data, valor, categoria, descricao=""):
+        """Registra uma receita do usuário (RF03)."""
         return self._repo.adicionar(Receita(data, valor, categoria, descricao), self._uid)
 
     def registrar_despesa(self, data, valor, categoria, descricao=""):
+        """Registra uma despesa do usuário (RF04)."""
         return self._repo.adicionar(Despesa(data, valor, categoria, descricao), self._uid)
 
     # ---------- RF05 / RF11 ----------
     def listar(self, tipo=None, inicio=None, fim=None):
+        """Lista as movimentações, com filtro opcional de tipo e período (RF05)."""
         if tipo not in (None, "receita", "despesa"):
             raise ValidacaoError("Tipo deve ser 'receita' ou 'despesa'.")
         ini, f = self._periodo(inicio, fim)
         return self._repo.listar(tipo, self._uid, ini, f)
 
     def obter(self, id_):
+        """Busca uma movimentação do usuário pelo ID."""
         return self._repo.buscar(id_, self._uid)
 
     # ---------- RF06: só altera os campos informados (None = manter) ----------
     def editar(self, id_, data=None, valor=None, categoria=None, descricao=None):
+        """Altera apenas os campos informados de uma movimentação (RF06)."""
         t = self._repo.buscar(id_, self._uid)
         if data is not None:
             t.data = data
@@ -108,16 +133,28 @@ class ControleFinanceiro:
 
     # ---------- RF07 ----------
     def remover(self, id_):
+        """Remove uma movimentação pelo ID (RF07)."""
         self._repo.remover(id_, self._uid)
 
     # ---------- RF08 ----------
     def calcular_saldo(self, inicio=None, fim=None):
+        """Calcula receitas, despesas e saldo, em todo o histórico ou em um período (RF08)."""
         ini, f = self._periodo(inicio, fim)
         totais = self._repo.totais_por_tipo(self._uid, ini, f)
         return Saldo(round(totais["receita"], 2), round(totais["despesa"], 2))
 
-    # ---------- RF09: relatório por categoria ----------
+    # ---------- RF09: relatório por período ----------
+    def relatorio_por_periodo(self, inicio=None, fim=None):
+        """Receitas, despesas, saldo e quantidade de lançamentos entre duas datas (RF09)."""
+        ini, f = self._periodo(inicio, fim)
+        totais = self._repo.totais_por_tipo(self._uid, ini, f)
+        qtds = self._repo.quantidades_por_tipo(self._uid, ini, f)
+        return ResumoPeriodo(ini, f, round(totais["receita"], 2), round(totais["despesa"], 2),
+                             qtds["receita"], qtds["despesa"])
+
+    # ---------- RF10: relatório por categoria ----------
     def relatorio_por_categoria(self, tipo="despesa", inicio=None, fim=None):
+        """Total e percentual de cada categoria, de despesas ou receitas (RF10)."""
         if tipo not in ("receita", "despesa"):
             raise ValidacaoError("Tipo deve ser 'receita' ou 'despesa'.")
         ini, f = self._periodo(inicio, fim)
@@ -137,8 +174,9 @@ class ControleFinanceiro:
             somas[chave] = somas.get(chave, 0.0) + total
         return {nomes[c]: v for c, v in somas.items()}
 
-    # ---------- RF10: resumo mensal ----------
+    # ---------- complemento do RF09: resumo mensal ----------
     def relatorio_mensal(self, ano):
+        """Receitas, despesas e saldo de cada mês de um ano (complemento do RF09)."""
         try:
             ano = int(ano)
         except (TypeError, ValueError):
@@ -169,9 +207,11 @@ class ControleFinanceiro:
         return existente
 
     def listar_metas(self):
+        """Lista as metas de gasto do usuário (RF11)."""
         return self._metas.listar(self._uid)
 
     def remover_meta(self, categoria):
+        """Remove a meta de uma categoria."""
         meta = self._meta_da_categoria(categoria)
         if meta is None:
             raise MetaNaoEncontradaError(f"Não há meta para a categoria '{categoria}'.")
@@ -184,6 +224,7 @@ class ControleFinanceiro:
         return date(ano, mes, 1), date(ano, mes, calendar.monthrange(ano, mes)[1])
 
     def status_metas(self, ano, mes):
+        """Acompanha o gasto de cada meta em um mês (RF12)."""
         ini, fim = self._limites_do_mes(ano, mes)
         gastos = {c.casefold(): v for c, v in self._agrupar_categorias(
             self._repo.totais_por_categoria("despesa", self._uid, ini, fim)).items()}
@@ -201,29 +242,60 @@ class ControleFinanceiro:
                 return status
         return None
 
-    # ---------- RF13: exportação ----------
-    def exportar_csv(self, caminho, inicio=None, fim=None):
-        """Grava CSV compatível com Excel pt-BR (separador ';', decimal ',', UTF-8 com BOM)."""
-        transacoes = self.listar(inicio=inicio, fim=fim)
+    # ---------- RF13: exportação de relatórios ----------
+    @staticmethod
+    def _gravar_csv(caminho, cabecalho, linhas):
+        """Grava CSV compatível com Excel pt-BR (separador ';', UTF-8 com BOM)."""
         try:
             with open(caminho, "w", newline="", encoding="utf-8-sig") as arq:
                 escritor = csv.writer(arq, delimiter=";")
-                escritor.writerow(["id", "tipo", "data", "valor", "categoria", "descricao"])
-                for t in transacoes:
-                    escritor.writerow([t.id, t.tipo(), t.data_br,
-                                       f"{t.valor:.2f}".replace(".", ","), t.categoria, t.descricao])
+                escritor.writerow(cabecalho)
+                escritor.writerows(linhas)
         except OSError as erro:
             raise ArquivoError(f"Não foi possível gravar '{caminho}': {erro}")
+
+    @staticmethod
+    def _virgula(valor):
+        """Formata número com 2 casas e vírgula decimal (padrão do Excel em português)."""
+        return f"{valor:.2f}".replace(".", ",")
+
+    def exportar_csv(self, caminho, inicio=None, fim=None):
+        """Exporta o relatório de movimentações (lista de transações do período)."""
+        transacoes = self.listar(inicio=inicio, fim=fim)
+        self._gravar_csv(
+            caminho, ["id", "tipo", "data", "valor", "categoria", "descricao"],
+            [[t.id, t.tipo(), t.data_br, self._virgula(t.valor), t.categoria, t.descricao]
+             for t in transacoes])
         return len(transacoes)
 
+    def exportar_relatorio_categoria(self, caminho, tipo="despesa", inicio=None, fim=None):
+        """Exporta o relatório por categoria (RF10) para CSV."""
+        resumo = self.relatorio_por_categoria(tipo, inicio, fim)
+        self._gravar_csv(
+            caminho, ["categoria", "total", "percentual"],
+            [[r.categoria, self._virgula(r.total), self._virgula(r.percentual)] for r in resumo])
+        return len(resumo)
+
+    def exportar_resumo_mensal(self, caminho, ano):
+        """Exporta o resumo mensal de um ano para CSV."""
+        resumo = self.relatorio_mensal(ano)
+        self._gravar_csv(
+            caminho, ["mes", "receitas", "despesas", "saldo"],
+            [[r.mes, self._virgula(r.receitas), self._virgula(r.despesas), self._virgula(r.saldo)]
+             for r in resumo])
+        return len(resumo)
+
     def importar_csv_legado(self, caminho):
+        """Importa o CSV do sistema anterior para a conta do usuário."""
         return self._repo.importar_csv(caminho, self._uid)
 
     # ---------- RF14: backup (operação global sobre o arquivo do banco) ----------
     def fazer_backup(self, destino):
+        """Copia o banco para um arquivo de backup (RF14)."""
         self._repo.banco.backup(destino)
 
     def restaurar_backup(self, origem):
+        """Restaura o banco a partir de um backup (RF14); substitui todos os dados."""
         self._repo.banco.restaurar(origem)
 
     def popular_dados_exemplo(self):

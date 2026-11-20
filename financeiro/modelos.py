@@ -39,6 +39,7 @@ def numero_positivo(valor, sujeito):
 
 
 def categoria_valida(valor):
+    """Remove espaços da categoria e rejeita texto vazio."""
     texto = str(valor).strip()
     if not texto:
         raise ValidacaoError("A categoria é obrigatória.")
@@ -121,18 +122,24 @@ class Transacao(ABC):
 
 
 class Receita(Transacao):
+    """Entrada de dinheiro (salário, freelance, vendas etc.)."""
     def tipo(self):
+        """Retorna o identificador do tipo: 'receita'."""
         return "receita"
 
     def exibir(self):
+        """Texto de uma linha para mostrar a receita ao usuário."""
         return f"[ID: {self.id}] RECEITA | {self._corpo()}"
 
 
 class Despesa(Transacao):
+    """Saída de dinheiro (aluguel, mercado, transporte etc.)."""
     def tipo(self):
+        """Retorna o identificador do tipo: 'despesa'."""
         return "despesa"
 
     def exibir(self):
+        """Texto de uma linha para mostrar a despesa ao usuário."""
         return f"[ID: {self.id}] DESPESA | {self._corpo()}"
 
 

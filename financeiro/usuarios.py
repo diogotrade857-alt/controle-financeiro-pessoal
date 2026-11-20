@@ -10,6 +10,7 @@ SENHA_MINIMA = 6
 
 
 class Usuario:
+    """Usuário do sistema, com nome e e-mail validados."""
     def __init__(self, nome, email, id=None):
         self._id = id
         self.nome = nome
@@ -46,6 +47,7 @@ class Usuario:
 
 
 class RepositorioUsuarios:
+    """Acesso ao SQLite para a tabela de usuários."""
     def __init__(self, banco):
         self._banco = banco
 
@@ -54,6 +56,7 @@ class RepositorioUsuarios:
         return self._banco.conn
 
     def contar(self):
+        """Quantidade de usuários cadastrados."""
         return self._conn.execute("SELECT COUNT(*) FROM usuarios").fetchone()[0]
 
     def adicionar(self, usuario, senha_hash):
@@ -75,6 +78,7 @@ class RepositorioUsuarios:
         return usuario
 
     def buscar_por_email(self, email):
+        """Retorna (Usuario, hash da senha) ou None se o e-mail não existir."""
         linha = self._conn.execute(
             "SELECT * FROM usuarios WHERE email = ?", (str(email).strip().lower(),)).fetchone()
         if linha is None:
@@ -83,16 +87,19 @@ class RepositorioUsuarios:
 
 
 class ServicoUsuarios:
+    """Regras de cadastro e login de usuários."""
     def __init__(self, repositorio_usuarios):
         self._repo = repositorio_usuarios
 
     def cadastrar(self, nome, email, senha):
+        """Valida os dados e cria o usuário, guardando só o hash da senha (RF01)."""
         usuario = Usuario(nome, email)           # valida nome e e-mail
         if not isinstance(senha, str) or len(senha) < SENHA_MINIMA:
             raise ValidacaoError(f"A senha deve ter pelo menos {SENHA_MINIMA} caracteres.")
         return self._repo.adicionar(usuario, seguranca.gerar_hash(senha))
 
     def autenticar(self, email, senha):
+        """Confere e-mail e senha e devolve o Usuario; lança AutenticacaoError se falhar (RF02)."""
         encontrado = self._repo.buscar_por_email(email)
         # Mesma mensagem para e-mail inexistente e senha errada (não revela quais e-mails existem).
         if encontrado is None or not seguranca.verificar(str(senha), encontrado[1]):
@@ -100,4 +107,5 @@ class ServicoUsuarios:
         return encontrado[0]
 
     def total_usuarios(self):
+        """Quantidade de usuários cadastrados."""
         return self._repo.contar()

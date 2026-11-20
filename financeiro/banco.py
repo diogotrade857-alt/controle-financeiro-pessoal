@@ -31,6 +31,7 @@ CREATE TABLE IF NOT EXISTS metas (
 
 
 class Banco:
+    """Conexão com o SQLite: cria o esquema, migra bancos antigos e faz backup e restauração."""
     def __init__(self, caminho="financeiro.db"):
         # ":memory:" cria um banco temporário (usado nos testes automatizados).
         try:
@@ -58,6 +59,7 @@ class Banco:
             raise ArquivoError(f"O arquivo informado não é um banco válido: {erro}")
 
     def fechar(self):
+        """Fecha a conexão com o banco."""
         self.conn.close()
 
     # ---------------- RF14: backup e restauração ----------------

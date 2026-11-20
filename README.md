@@ -16,24 +16,32 @@ O que ficou de fora: interface gráfica ou web, várias moedas, ligação com ba
 
 ## Requisitos
 
+Os requisitos são os da proposta (Entrega 1).
+
 | ID | O que o sistema faz | Onde está no código |
 |---|---|---|
-| RF01 | Cadastrar usuário | `usuarios.py` |
-| RF02 | Login, com dados separados por usuário | `usuarios.py`, `seguranca.py`, `repositorio.py` |
+| RF01 | Cadastro de usuários | `usuarios.py` |
+| RF02 | Autenticação, com dados separados por usuário | `usuarios.py`, `seguranca.py`, `repositorio.py` |
 | RF03 | Cadastrar receitas | `servico.py` |
 | RF04 | Cadastrar despesas | `servico.py` |
 | RF05 | Listar movimentações | `servico.py` |
 | RF06 | Editar movimentações | `servico.py` |
 | RF07 | Excluir movimentações | `servico.py` |
-| RF08 | Calcular o saldo | `servico.py` |
-| RF09 | Relatório por categoria | `servico.py` |
-| RF10 | Resumo mensal | `servico.py` |
-| RF11 | Filtrar por período | `servico.py` |
-| RF12 | Metas de gasto com alerta | `servico.py` |
-| RF13 | Exportar para CSV | `servico.py` |
-| RF14 | Backup e restauração | `banco.py` |
-| RNF03 | Salvar em SQLite | `banco.py`, `repositorio.py` |
-| RNF05 | Tratar erros e validar dados | `excecoes.py`, `modelos.py` |
+| RF08 | Calcular saldo | `servico.py` |
+| RF09 | Relatório por período (e resumo mensal) | `servico.py` |
+| RF10 | Relatório por categoria | `servico.py` |
+| RF11 | Cadastrar metas (limite mensal de gasto por categoria) | `servico.py` |
+| RF12 | Acompanhar metas, com aviso e alerta | `servico.py` |
+| RF13 | Exportar relatórios para CSV | `servico.py` |
+| RF14 | Backup e restauração dos dados | `banco.py` |
+| RNF01 | Python, só com a biblioteca padrão | todo o projeto |
+| RNF02 | Programação Orientada a Objetos | `modelos.py`, `servico.py` |
+| RNF03 | Persistência em SQLite | `banco.py`, `repositorio.py` |
+| RNF04 | Interface simples (menus numerados, mensagens claras) | `main.py` |
+| RNF05 | Tratamento de exceções | `excecoes.py`, `modelos.py` |
+| RNF06 | Código documentado (docstrings e README) | todo o projeto |
+| RNF07 | Versionamento em Git | este repositório |
+| RNF08 | Resposta em menos de 3 segundos | testado com 2.000 transações |
 
 Os testes que comprovam cada requisito estão no arquivo [HOMOLOGACAO.md](HOMOLOGACAO.md).
 
@@ -63,9 +71,9 @@ Na primeira vez, crie uma conta e depois entre com ela. As datas vão no formato
 | 3 | Lista as transações, com filtro de período opcional |
 | 4 | Mostra o saldo |
 | 5 e 6 | Edita ou remove uma transação pelo ID |
-| 7 | Relatórios: por categoria ou resumo mensal |
+| 7 | Relatórios: por período, despesas ou receitas por categoria, resumo mensal do ano |
 | 8 | Metas: definir, acompanhar o mês e remover |
-| 9 | Exporta as transações para CSV |
+| 9 | Exporta relatórios para CSV (movimentações, por categoria ou resumo mensal) |
 | 10 e 11 | Faz backup do banco ou restaura um backup (precisa digitar `RESTAURAR` para confirmar) |
 | 12 | Importa o CSV do sistema antigo (`transacoes_poo.csv`) |
 | 0 | Sai da conta |
@@ -77,7 +85,7 @@ python -m unittest -v
 python homologar.py
 ```
 
-O primeiro comando roda os 52 testes. O segundo roda os testes e gera o `HOMOLOGACAO.md`, que mostra cada requisito com os testes dele.
+O primeiro comando roda os 60 testes. O segundo roda os testes e gera o `HOMOLOGACAO.md`, que mostra cada requisito com os testes dele.
 
 Os testes estão em `tests/`. O `test_mvp.py` é da Entrega 2 e o `test_requisitos.py` foi feito para esta entrega.
 

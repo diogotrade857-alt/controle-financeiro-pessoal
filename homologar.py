@@ -2,7 +2,7 @@
 
 Uso:  python homologar.py
 Cada teste de tests/test_requisitos.py leva o ID do requisito no nome (test_rf07_..., test_rnf05_...).
-Ajuste o dicionário REQUISITOS abaixo para que IDs e descrições fiquem idênticos aos da Entrega 1.
+Os IDs e descrições de REQUISITOS são os da proposta (Entrega 1).
 """
 import re
 import sys
@@ -10,22 +10,33 @@ import unittest
 from datetime import datetime
 
 REQUISITOS = {
-    "RF01": "Cadastrar usuário",
-    "RF02": "Autenticar usuário (login) e isolar os dados de cada usuário",
+    "RF01": "Permitir cadastro de usuários",
+    "RF02": "Permitir autenticação de usuários",
     "RF03": "Cadastrar receitas",
     "RF04": "Cadastrar despesas",
-    "RF05": "Listar movimentações",
+    "RF05": "Listar movimentações financeiras",
     "RF06": "Editar movimentações",
     "RF07": "Excluir movimentações",
-    "RF08": "Calcular saldo",
-    "RF09": "Relatório por categoria",
-    "RF10": "Resumo mensal",
-    "RF11": "Filtrar por período",
-    "RF12": "Metas de gastos por categoria com alertas",
-    "RF13": "Exportar dados para CSV",
-    "RF14": "Backup e restauração dos dados",
-    "RNF03": "Persistência em SQLite",
-    "RNF05": "Tratamento de exceções e validações",
+    "RF08": "Calcular saldo financeiro",
+    "RF09": "Emitir relatório por período",
+    "RF10": "Emitir relatório por categoria",
+    "RF11": "Cadastrar metas financeiras",
+    "RF12": "Acompanhar metas financeiras",
+    "RF13": "Exportar relatórios",
+    "RF14": "Realizar backup dos dados",
+    "RNF01": "Desenvolvimento em Python",
+    "RNF02": "Utilização de Programação Orientada a Objetos",
+    "RNF03": "Persistência em banco SQLite",
+    "RNF04": "Interface simples e intuitiva",
+    "RNF05": "Tratamento de exceções",
+    "RNF06": "Código documentado",
+    "RNF07": "Versionamento em Git",
+    "RNF08": "Tempo de resposta inferior a 3 segundos",
+}
+
+# Evidências que não podem ser verificadas por teste automatizado.
+EVIDENCIAS_MANUAIS = {
+    "RNF07": "Repositório Git: https://github.com/diogotrade857-alt/controle-financeiro-pessoal",
 }
 
 
@@ -64,9 +75,11 @@ def main():
     for req, descricao in REQUISITOS.items():
         testes = por_req.get(req, [])
         ok = bool(testes) and all(s == "OK" for _, s in testes)
+        nomes = "<br>".join(f"`{n}`" for n, _ in testes)
+        if not testes and req in EVIDENCIAS_MANUAIS:
+            ok, nomes = True, "Evidência manual: " + EVIDENCIAS_MANUAIS[req]
         todos_ok &= ok
-        nomes = "<br>".join(f"`{n}`" for n, _ in testes) or "—"
-        linhas.append(f"| {req} | {descricao} | {nomes} | {'✅ Atendido' if ok else '❌ Pendente'} |")
+        linhas.append(f"| {req} | {descricao} | {nomes or '—'} | {'✅ Atendido' if ok else '❌ Pendente'} |")
     total = resultado.testsRun
     linhas += ["", f"**Suíte completa:** {total} testes executados, "
                    f"{len(resultado.failures) + len(resultado.errors)} falha(s).",

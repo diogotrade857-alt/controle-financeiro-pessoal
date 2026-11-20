@@ -2,8 +2,10 @@
 
 O script homologar.py usa o ID no nome do teste para montar a matriz de rastreabilidade.
 """
+import ast
 import csv
 import os
+import time
 import sqlite3
 import tempfile
 import unittest
@@ -144,7 +146,7 @@ class TestRelatorios(Base):
         s.registrar_despesa("12/05/2026", 100, "Lazer")
         s.registrar_receita("15/05/2026", 2000, "Salário")
 
-    def test_rf09_relatorio_por_categoria(self):
+    def test_rf10_relatorio_por_categoria(self):
         r = self.sa.relatorio_por_categoria("despesa")
         self.assertEqual([(x.categoria, x.total, x.percentual) for x in r],
                          [("Mercado", 400.0, 80.0), ("Lazer", 100.0, 20.0)])
@@ -153,7 +155,18 @@ class TestRelatorios(Base):
         with self.assertRaises(ValidacaoError):
             self.sa.relatorio_por_categoria("x")
 
-    def test_rf10_resumo_mensal(self):
+    def test_rf09_relatorio_por_periodo(self):
+        r = self.sa.relatorio_por_periodo("01/05/2026", "31/05/2026")
+        self.assertEqual((r.receitas, r.despesas, r.saldo, r.qtd_receitas, r.qtd_despesas),
+                         (2000.0, 500.0, 1500.0, 1, 3))
+        tudo = self.sa.relatorio_por_periodo()
+        self.assertEqual((tudo.receitas, tudo.qtd_receitas), (3000.0, 2))
+        vazio = self.sb.relatorio_por_periodo("01/05/2026", "31/05/2026")
+        self.assertEqual((vazio.receitas, vazio.despesas, vazio.saldo), (0.0, 0.0, 0.0))
+        with self.assertRaises(ValidacaoError):
+            self.sa.relatorio_por_periodo("31/05/2026", "01/05/2026")
+
+    def test_rf09_resumo_mensal(self):
         r = self.sa.relatorio_mensal(2026)
         self.assertEqual([(x.mes, x.receitas, x.despesas, x.saldo) for x in r],
                          [("2026-04", 1000.0, 0.0, 1000.0), ("2026-05", 2000.0, 500.0, 1500.0)])
@@ -162,7 +175,7 @@ class TestRelatorios(Base):
             with self.assertRaises(ValidacaoError):
                 self.sa.relatorio_mensal(invalido)
 
-    def test_rf11_filtrar_por_periodo(self):
+    def test_rf09_filtrar_por_periodo(self):
         self.assertEqual(len(self.sa.listar(inicio="01/05/2026", fim="11/05/2026")), 2)
         self.assertEqual(self.sa.calcular_saldo(inicio="01/05/2026", fim="31/05/2026").total, 1500.0)
         self.assertEqual(len(self.sa.listar(inicio="12/05/2026")), 2)
@@ -173,13 +186,13 @@ class TestRelatorios(Base):
 
 
 class TestMetas(Base):
-    def test_rf12_definir_e_atualizar_meta(self):
+    def test_rf11_definir_e_atualizar_meta(self):
         self.sa.definir_meta("Mercado", 500)
         self.sa.definir_meta("mercado", 600)                  # atualiza, não duplica
         self.assertEqual([(m.categoria, m.limite) for m in self.sa.listar_metas()], [("Mercado", 600.0)])
         self.assertEqual(self.sb.listar_metas(), [])
 
-    def test_rf12_meta_invalida(self):
+    def test_rf11_meta_invalida(self):
         for categoria, limite in [("", 10), ("X", 0), ("X", -5), ("X", "abc")]:
             with self.assertRaises(ValidacaoError):
                 self.sa.definir_meta(categoria, limite)
@@ -196,7 +209,7 @@ class TestMetas(Base):
         with self.assertRaises(ValidacaoError):
             self.sa.status_metas(2026, 13)
 
-    def test_rf12_remover_meta(self):
+    def test_rf11_remover_meta(self):
         self.sa.definir_meta("Mercado", 100)
         self.sa.remover_meta("MERCADO")
         self.assertEqual(self.sa.listar_metas(), [])
@@ -216,6 +229,32 @@ class TestArquivos(Base):
         self.assertEqual(linhas[0], ["id", "tipo", "data", "valor", "categoria", "descricao"])
         self.assertEqual(linhas[1][1:], ["despesa", "10/05/2026", "12,50", "Mercado", "pão; leite; \"ovos\""])
         self.assertEqual(len(linhas), 2)
+
+    def test_rf13_exportar_relatorio_por_categoria(self):
+        self.sa.registrar_despesa("10/05/2026", 300, "Mercado")
+        self.sa.registrar_despesa("11/05/2026", 100, "Lazer")
+        self.sa.registrar_receita("12/05/2026", 999, "Salário")
+        destino = self.caminho("categorias.csv")
+        self.assertEqual(self.sa.exportar_relatorio_categoria(destino, "despesa"), 2)
+        with open(destino, encoding="utf-8-sig", newline="") as f:
+            linhas = list(csv.reader(f, delimiter=";"))
+        self.assertEqual(linhas, [["categoria", "total", "percentual"],
+                                  ["Mercado", "300,00", "75,00"], ["Lazer", "100,00", "25,00"]])
+        with self.assertRaises(ValidacaoError):
+            self.sa.exportar_relatorio_categoria(destino, "outro")
+
+    def test_rf13_exportar_resumo_mensal(self):
+        self.sa.registrar_receita("05/04/2026", 1000, "Salário")
+        self.sa.registrar_despesa("10/05/2026", 250.5, "Mercado")
+        destino = self.caminho("mensal.csv")
+        self.assertEqual(self.sa.exportar_resumo_mensal(destino, 2026), 2)
+        with open(destino, encoding="utf-8-sig", newline="") as f:
+            linhas = list(csv.reader(f, delimiter=";"))
+        self.assertEqual(linhas[0], ["mes", "receitas", "despesas", "saldo"])
+        self.assertEqual(linhas[1], ["2026-04", "1000,00", "0,00", "1000,00"])
+        self.assertEqual(linhas[2], ["2026-05", "0,00", "250,50", "-250,50"])
+        with self.assertRaises(ErroFinanceiro):
+            self.sa.exportar_resumo_mensal(self.caminho("sem_pasta/x.csv"), 2026)
 
     def test_rf13_exportar_para_local_invalido(self):
         with self.assertRaises(ErroFinanceiro):
@@ -250,6 +289,97 @@ class TestArquivos(Base):
         with self.assertRaises(BackupError):
             self.sa.restaurar_backup(outro)
         self.assertEqual(self.usuarios.total_usuarios(), 2)          # banco atual intacto
+
+
+class TestRequisitosNaoFuncionais(Base):
+    RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+    def _arquivos_codigo(self):
+        pasta = os.path.join(self.RAIZ, "financeiro")
+        achados = [os.path.join(pasta, n) for n in sorted(os.listdir(pasta)) if n.endswith(".py")]
+        return achados + [os.path.join(self.RAIZ, "main.py")]
+
+    def test_rnf01_python_somente_biblioteca_padrao(self):
+        permitidos = {"abc", "argparse", "calendar", "csv", "dataclasses", "datetime", "getpass",
+                      "hashlib", "hmac", "math", "os", "re", "sqlite3", "financeiro"}
+        for caminho in self._arquivos_codigo():
+            with open(caminho, encoding="utf-8") as f:
+                arvore = ast.parse(f.read())
+            for no in ast.walk(arvore):
+                if isinstance(no, ast.Import):
+                    modulos = {a.name.split(".")[0] for a in no.names}
+                elif isinstance(no, ast.ImportFrom) and no.level == 0:
+                    modulos = {no.module.split(".")[0]}
+                else:
+                    continue
+                self.assertTrue(modulos <= permitidos, f"{caminho}: {modulos - permitidos}")
+
+    def test_rnf02_orientacao_a_objetos(self):
+        from abc import ABC
+        from financeiro.modelos import Despesa, Receita, Transacao
+        self.assertTrue(issubclass(Transacao, ABC))                       # abstração
+        with self.assertRaises(TypeError):
+            Transacao("10/05/2026", 10, "X")
+        self.assertTrue(issubclass(Receita, Transacao) and issubclass(Despesa, Transacao))   # herança
+        r, d = Receita("10/05/2026", 10, "X"), Despesa("10/05/2026", 10, "X")
+        self.assertNotEqual((r.tipo(), r.exibir()[:9]), (d.tipo(), d.exibir()[:9]))      # polimorfismo
+        with self.assertRaises(ValidacaoError):                                         # encapsulamento
+            r.valor = -5
+        self.assertIs(self.sa._repo, self.repo)                                         # composição
+
+    def test_rnf04_interface_simples_e_mensagens_claras(self):
+        saida = []
+        entradas = ["1", "ana@exemplo.com", "99", "2", "10/05/2026", "150,50", "Mercado", "", "0", "0"]
+        with mock.patch("builtins.input", side_effect=entradas), \
+             mock.patch.object(cli, "ler_senha", return_value="senha123"), \
+             mock.patch("builtins.print", side_effect=lambda *a, **k: saida.append(" ".join(map(str, a)))):
+            cli.menu_inicial(self.repo, self.usuarios)
+        texto = "\n".join(saida)
+        self.assertIn("1 - Adicionar Receita", texto)         # menu numerado
+        self.assertIn("Opção inválida", texto)                # opção errada não derruba o programa
+        self.assertIn("Registrado com sucesso", texto)        # aceitou vírgula decimal
+        self.assertNotIn("Traceback", texto)
+
+    def test_rnf06_codigo_documentado(self):
+        sem_doc = []
+        for caminho in self._arquivos_codigo():
+            with open(caminho, encoding="utf-8") as f:
+                arvore = ast.parse(f.read())
+            nome = os.path.basename(caminho)
+            if not ast.get_docstring(arvore):
+                sem_doc.append(f"{nome} (módulo)")
+            for no in ast.walk(arvore):
+                if isinstance(no, ast.ClassDef) and not ast.get_docstring(no):
+                    sem_doc.append(f"{nome}: classe {no.name}")
+                funcoes = [no] if isinstance(no, ast.FunctionDef) else []
+                if isinstance(no, ast.ClassDef):
+                    funcoes = [m for m in no.body if isinstance(m, ast.FunctionDef)]
+                for f in funcoes:
+                    decoradores = [ast.unparse(d) for d in f.decorator_list]
+                    if f.name.startswith("_") or any("property" in d or ".setter" in d for d in decoradores):
+                        continue
+                    if not ast.get_docstring(f):
+                        sem_doc.append(f"{nome}: {f.name}")
+        self.assertEqual(sem_doc, [])
+        self.assertTrue(os.path.exists(os.path.join(self.RAIZ, "README.md")))
+
+    def test_rnf08_tempo_de_resposta_menor_que_3_segundos(self):
+        for i in range(2000):
+            dia = 1 + i % 28
+            self.sa.registrar_despesa(f"{dia:02d}/{1 + i % 12:02d}/2026", 10 + i % 90, f"Cat{i % 15}")
+        destino = self.caminho("tempo.csv")
+        operacoes = {
+            "listar": lambda: self.sa.listar(),
+            "saldo": lambda: self.sa.calcular_saldo(),
+            "periodo": lambda: self.sa.relatorio_por_periodo("01/03/2026", "30/06/2026"),
+            "categoria": lambda: self.sa.relatorio_por_categoria("despesa"),
+            "mensal": lambda: self.sa.relatorio_mensal(2026),
+            "exportar": lambda: self.sa.exportar_csv(destino),
+        }
+        for nome, operacao in operacoes.items():
+            inicio = time.perf_counter()
+            operacao()
+            self.assertLess(time.perf_counter() - inicio, 3.0, nome)
 
 
 class TestPersistenciaEMigracao(unittest.TestCase):
@@ -351,7 +481,7 @@ class TestInterfaceCLI(Base):
             "2", "11/05/2026", "30,00", "Mercado", "mais",        # despesa -> meta excedida
             "1", "10/05/2026", "1000", "Salário", "",             # receita
             "4",                                                  # saldo
-            "7", "1", "", "",                                     # relatório por categoria
+            "7", "2", "", "",                                     # relatório por categoria
             "3", "n",                                             # listar
             "2", "10/05/2026", "abc", "X", "",                    # valor inválido: erro, sem derrubar
             "6", "99",                                            # id inexistente: erro, sem derrubar

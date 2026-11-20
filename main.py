@@ -21,15 +21,18 @@ LIMIAR_AVISO_META = 80.0   # % do limite a partir do qual o usuário é avisado
 
 
 def moeda(v):
+    """Formata um valor como R$ 0.00."""
     return f"R$ {v:.2f}"
 
 
 # ------------------------------- entrada -------------------------------
 def ler_senha(mensagem):
+    """Lê a senha sem mostrá-la na tela."""
     return getpass.getpass(mensagem)
 
 
 def ler_inteiro(mensagem):
+    """Lê um número inteiro; lança ValidacaoError se o texto não for numérico."""
     try:
         return int(input(mensagem).strip())
     except ValueError:
@@ -38,16 +41,19 @@ def ler_inteiro(mensagem):
 
 def ler_valor(mensagem):
     # Aceita vírgula decimal (padrão brasileiro) e ponto.
+    """Lê um valor aceitando vírgula ou ponto decimal."""
     return input(mensagem).strip().replace(",", ".")
 
 
 def ler_periodo():
+    """Pergunta data inicial e final (ENTER = sem limite)."""
     inicio = input("Data inicial (dd/mm/aaaa, ENTER = sem limite): ").strip() or None
     fim = input("Data final   (dd/mm/aaaa, ENTER = sem limite): ").strip() or None
     return inicio, fim
 
 
 def ler_mes_ano():
+    """Lê um mês no formato mm/aaaa (ENTER = mês atual)."""
     texto = input("Mês (mm/aaaa, ENTER = mês atual): ").strip()
     if not texto:
         hoje = datetime.now()
@@ -61,6 +67,7 @@ def ler_mes_ano():
 
 # ------------------------------- transações -------------------------------
 def avisar_meta(sistema, t):
+    """Mostra aviso ou alerta se a despesa aproximou ou estourou a meta da categoria."""
     status = sistema.status_meta_da_categoria(t.categoria, t.data)
     if status is None:
         return
@@ -73,6 +80,7 @@ def avisar_meta(sistema, t):
 
 
 def cadastrar(sistema, receita):
+    """Lê os dados e registra uma receita ou uma despesa."""
     data = input("Data (dd/mm/aaaa): ")
     valor = ler_valor("Valor (ex: 150,50): ")
     categoria = input("Categoria: ")
@@ -87,6 +95,7 @@ def cadastrar(sistema, receita):
 
 
 def listar(sistema, inicio=None, fim=None):
+    """Mostra as transações do usuário; retorna False se não houver nenhuma."""
     transacoes = sistema.listar(inicio=inicio, fim=fim)
     if not transacoes:
         print("Nenhuma transação encontrada.")
@@ -98,6 +107,7 @@ def listar(sistema, inicio=None, fim=None):
 
 
 def listar_com_filtro(sistema):
+    """Lista as transações, com filtro de período opcional."""
     if input("Filtrar por período? (s/N): ").strip().lower() == "s":
         inicio, fim = ler_periodo()
         listar(sistema, inicio, fim)
@@ -106,6 +116,7 @@ def listar_com_filtro(sistema):
 
 
 def mostrar_saldo(sistema):
+    """Mostra receitas, despesas e saldo."""
     s = sistema.calcular_saldo()
     print("\n=== RESUMO FINANCEIRO ===")
     print(f"Total Receitas: {moeda(s.receitas)}")
@@ -114,6 +125,7 @@ def mostrar_saldo(sistema):
 
 
 def editar(sistema):
+    """Edita uma transação; ENTER mantém o valor atual."""
     if not listar(sistema):
         return
     id_ = ler_inteiro("\nID da transação a editar: ")
@@ -128,6 +140,7 @@ def editar(sistema):
 
 
 def remover(sistema):
+    """Remove uma transação pelo ID."""
     if not listar(sistema):
         return
     id_ = ler_inteiro("\nID da transação a remover: ")
@@ -137,6 +150,7 @@ def remover(sistema):
 
 # ------------------------------- relatórios -------------------------------
 def relatorio_categoria(sistema, tipo):
+    """Mostra o relatório de despesas ou receitas por categoria."""
     inicio, fim = ler_periodo()
     linhas = sistema.relatorio_por_categoria(tipo, inicio, fim)
     if not linhas:
@@ -147,7 +161,20 @@ def relatorio_categoria(sistema, tipo):
         print(f"{r.categoria:<20} {moeda(r.total):>14}  {r.percentual:>5.1f}%")
 
 
+def relatorio_periodo(sistema):
+    """Mostra receitas, despesas e saldo de um período (RF09)."""
+    inicio, fim = ler_periodo()
+    r = sistema.relatorio_por_periodo(inicio, fim)
+    de = r.inicio.strftime("%d/%m/%Y") if r.inicio else "início"
+    ate = r.fim.strftime("%d/%m/%Y") if r.fim else "hoje"
+    print(f"\n=== RELATÓRIO DO PERÍODO ({de} a {ate}) ===")
+    print(f"Receitas: {moeda(r.receitas)} ({r.qtd_receitas} lançamento(s))")
+    print(f"Despesas: {moeda(r.despesas)} ({r.qtd_despesas} lançamento(s))")
+    print(f"Saldo:    {moeda(r.saldo)}")
+
+
 def relatorio_mensal(sistema):
+    """Mostra o resumo mensal de um ano."""
     ano = input("Ano (aaaa, ENTER = ano atual): ").strip() or datetime.now().year
     linhas = sistema.relatorio_mensal(ano)
     if not linhas:
@@ -160,13 +187,17 @@ def relatorio_mensal(sistema):
 
 
 def menu_relatorios(sistema):
-    print("\n1 - Despesas por categoria\n2 - Receitas por categoria\n3 - Resumo mensal do ano")
+    """Menu dos relatórios."""
+    print("\n1 - Relatório por período\n2 - Despesas por categoria\n3 - Receitas por categoria"
+          "\n4 - Resumo mensal do ano")
     op = input("Opção: ").strip()
     if op == "1":
-        relatorio_categoria(sistema, "despesa")
+        relatorio_periodo(sistema)
     elif op == "2":
-        relatorio_categoria(sistema, "receita")
+        relatorio_categoria(sistema, "despesa")
     elif op == "3":
+        relatorio_categoria(sistema, "receita")
+    elif op == "4":
         relatorio_mensal(sistema)
     else:
         print("Opção inválida!")
@@ -174,6 +205,7 @@ def menu_relatorios(sistema):
 
 # ------------------------------- metas -------------------------------
 def menu_metas(sistema):
+    """Menu das metas de gasto: definir, acompanhar e remover."""
     print("\n1 - Definir/alterar meta\n2 - Acompanhar metas do mês\n3 - Remover meta")
     op = input("Opção: ").strip()
     if op == "1":
@@ -198,13 +230,31 @@ def menu_metas(sistema):
 
 # ------------------------------- arquivos -------------------------------
 def exportar(sistema):
-    caminho = input("Arquivo de destino [exportacao_financeira.csv]: ").strip() \
-        or "exportacao_financeira.csv"
-    inicio, fim = ler_periodo()
-    print(f"{sistema.exportar_csv(caminho, inicio, fim)} transação(ões) exportada(s) para '{caminho}'.")
+    """Exporta um relatório para CSV (RF13)."""
+    print("\n1 - Movimentações do período\n2 - Despesas por categoria"
+          "\n3 - Receitas por categoria\n4 - Resumo mensal do ano")
+    op = input("Relatório a exportar: ").strip()
+    if op not in ("1", "2", "3", "4"):
+        print("Opção inválida!")
+        return
+    padrao = {"1": "movimentacoes.csv", "2": "despesas_por_categoria.csv",
+              "3": "receitas_por_categoria.csv", "4": "resumo_mensal.csv"}[op]
+    caminho = input(f"Arquivo de destino [{padrao}]: ").strip() or padrao
+    if op == "4":
+        ano = input("Ano (aaaa, ENTER = ano atual): ").strip() or datetime.now().year
+        qtd = sistema.exportar_resumo_mensal(caminho, ano)
+    else:
+        inicio, fim = ler_periodo()
+        if op == "1":
+            qtd = sistema.exportar_csv(caminho, inicio, fim)
+        else:
+            tipo = "despesa" if op == "2" else "receita"
+            qtd = sistema.exportar_relatorio_categoria(caminho, tipo, inicio, fim)
+    print(f"{qtd} linha(s) exportada(s) para '{caminho}'.")
 
 
 def backup(sistema):
+    """Cria um backup do banco."""
     padrao = datetime.now().strftime("backup_%Y%m%d_%H%M%S.db")
     destino = input(f"Arquivo de backup [{padrao}]: ").strip() or padrao
     sistema.fazer_backup(destino)
@@ -224,6 +274,7 @@ def restaurar(sistema):
 
 
 def importar_csv(sistema):
+    """Importa o CSV do sistema anterior."""
     caminho = input("Caminho do CSV antigo [transacoes_poo.csv]: ").strip() or "transacoes_poo.csv"
     if not os.path.exists(caminho):
         print("Arquivo não encontrado.")
@@ -233,6 +284,7 @@ def importar_csv(sistema):
 
 # ------------------------------- menus -------------------------------
 def menu_principal(repo, usuario):
+    """Menu do usuário logado; retorna ao sair da conta ou após restaurar um backup."""
     sistema = ControleFinanceiro(repo, usuario.id)
     print(f"\nOlá, {usuario.nome}!")
     while True:
@@ -244,7 +296,7 @@ def menu_principal(repo, usuario):
         print("6 - Remover Transação")
         print("7 - Relatórios")
         print("8 - Metas de gastos")
-        print("9 - Exportar para CSV")
+        print("9 - Exportar relatórios (CSV)")
         print("10 - Backup do banco")
         print("11 - Restaurar backup")
         print("12 - Importar CSV do sistema anterior")
@@ -283,6 +335,7 @@ def menu_principal(repo, usuario):
 
 
 def criar_conta(usuarios):
+    """Cadastra um novo usuário."""
     nome = input("Nome: ")
     email = input("E-mail: ")
     senha = ler_senha("Senha (mín. 6 caracteres): ")
@@ -293,6 +346,7 @@ def criar_conta(usuarios):
 
 
 def menu_inicial(repo, usuarios):
+    """Menu de entrada: entrar, criar conta ou encerrar."""
     print("--- Sistema de Controle Financeiro Pessoal 2.0 ---")
     while True:
         print("\n1 - Entrar\n2 - Criar conta\n0 - Encerrar")
@@ -313,6 +367,7 @@ def menu_inicial(repo, usuarios):
 
 
 def preparar_demo(repo, usuarios):
+    """Cria a conta de demonstração com dados de exemplo, se não houver usuários."""
     if usuarios.total_usuarios() > 0:
         return
     demo = usuarios.cadastrar("Usuário Demo", "demo@exemplo.com", "demo123")
@@ -321,6 +376,7 @@ def preparar_demo(repo, usuarios):
 
 
 def main():
+    """Ponto de entrada do programa."""
     parser = argparse.ArgumentParser(description="Controle Financeiro Pessoal 2.0")
     parser.add_argument("--db", default="financeiro.db", help="arquivo SQLite (padrão: financeiro.db)")
     parser.add_argument("--demo", action="store_true",
